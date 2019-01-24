@@ -18,26 +18,51 @@ function getData($url) {
     return $data;
 }
 
-function getMeta($content, $meta)
+function getMetas($content)
 {
-    preg_match_all( '#<\s*meta\s*(name|property|content)\s*=\s*("|\')(.*)("|\')\s*(name|property|content)\s*=\s*("|\')(.*)("|\')(\s+)?/?>#i', $content, $matches, PREG_SET_ORDER );
-    $description = array_filter($matches, function($el) use ($meta) {
-        return !empty(array_filter($el, function($el2) use ($meta) {
-            return $el2 == $meta;
-        }));
-    });
-    if (!empty($description)) {
-        $description = array_filter(array_shift($description), function($el) use ($meta) {
-            $el = trim($el);
-            return !empty($el) && strpos($el, '<meta') === false && $el !== $meta && $el !== 'content' && $el !== 'name' && $el !== 'property' && $el !== '"' && $el !== "'";
-        });
+    preg_match_all( '#<\s*meta\s*(name|property|content)\s*=\s*("|\')(.*)("|\')\s*(name|property|content)\s*=\s*("|\')(.*)("|\')(\s+)?\/?>#i', $content, $matches, PREG_SET_ORDER );
 
-        $description = array_shift($description);
+    if (!empty($matches)) {
+        $result = array_map(function($arr) {
+            return array_values(array_filter($arr, function($el) {
+                $el = trim($el);
+                return !empty($el) && strpos($el, '<meta') === false
+                    && $el !== $meta && $el !== 'content' && $el !== 'name'
+                    && $el !== 'property' && $el !== '"' && $el !== "'";
+            }));
+        }, $matches);
     } else {
-        $description = null;
+        $result = null;
     }
 
-    return $description;
+    return $result;
+}
+
+function getMeta($metas, $meta)
+{
+    $result = array_filter($metas, function($arr) use($meta) {
+        return $arr[0] == $meta;
+    });
+
+    if (!empty($result)) {
+        $result = array_shift($result);
+        preg_match('/\.([jpg|jpeg|png|gif]){3,}/i', $result[1], $matches);
+        if (!empty($matches)) {
+            if ((($posicao = strpos($result[1], '.jpg')) !== false)
+                || (($posicao = strpos($result[1], '.png')) !== false)
+                || (($posicao = strpos($result[1], '.gif')) !== false)) {
+                $tamanho = 4;
+            } else if (($posicao = strpos($result[1], '.jpeg')) !== false) {
+                $tamanho = 5;
+            }
+
+            return substr($result[1], 0, ($posicao + $tamanho));
+        }
+
+        return $result[1];
+    }
+
+    return null;
 }
 
 $url = filter_var($_GET['url'], FILTER_VALIDATE_URL);
@@ -51,18 +76,20 @@ if (!file_exists($cache)) {
     });
     $title = array_shift($title);
 
-    $description = getMeta($content, 'description');
+    $metas = getMetas($content);
+
+    $description = getMeta($metas, 'description');
     if (empty($description)) {
-        $description = getMeta($content, 'og:description');
+        $description = getMeta($metas, 'og:description');
     }
 
     if (empty($description)) {
-        $description = getMeta($content, 'twitter:description');
+        $description = getMeta($metas, 'twitter:description');
     }
 
-    $image = getMeta($content, 'og:image');
+    $image = getMeta($metas, 'og:image');
     if (empty($image)) {
-        $image = getMeta($content, 'twitter:image');
+        $image = getMeta($metas, 'twitter:image');
     }
 
     if (empty($image)) {
